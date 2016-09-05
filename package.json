@@ -1,5 +1,5 @@
 ﻿{
-    "name": "auth",
+    "name": "SHPS4Node-auth",
     "version": "1.0.0",
     "description": "Authentication used by SHPS",
     "author": "Marco Alka <me@marco-alka.de>",
