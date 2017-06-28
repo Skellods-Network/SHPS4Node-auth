@@ -1,35 +1,32 @@
 ﻿'use strict';
 
-var me = module.exports;
+const me = module.exports;
 
-GLOBAL.SHPS_COOKIE_AUTOLOGINTOKEN = 'SHPSALT';
+global.SHPS_COOKIE_AUTOLOGINTOKEN = 'SHPSALT';
 
-var q = require('q');
-var defer = require('promise-defer');
-var oa = require('object-assign');
-var async = require('vasync');
-var u = require('util');
-var crypt = require('crypto');
+const defer = require('promise-defer');
+const async = require('vasync');
 
-var libs = require('node-mod-load').libs;
+const libs = require('node-mod-load')('SHPS4Node').libs;
 
-var Auth
+const Auth
 = me.focus = function c_Auth($requestState) {
     
-    var _session;
-    var self = this;
-    var log = libs.log.newLog($requestState);
+    let _session;
+    const log = libs.log.newLog($requestState);
 
+    // noinspection JSUnusedGlobalSymbols
     this.getSession = function f_auth_getSession() {
 
         return _session;
-    }
+    };
     
-    var _updatePassword = function f_auth_updatePassword($uid, $passwd) {
+    // noinspection JSUnusedLocalSymbols
+    const _updatePassword = function f_auth_updatePassword($uid, $passwd) {
 
         libs.sql.newSQL('usermanagement', $requestState).done(function f_auth_updatePassword_newSQL($sql) {
             
-            var tbl = $sql.openTable('user');
+            const tbl = $sql.openTable('user');
             $sql.query()
                 .get(tbl.col('salt'))
                 .fulfilling()
@@ -37,7 +34,7 @@ var Auth
                 .execute()
                 .done(function f_auth_updatePassword_newSQL_query($rows) {
                     
-                if ($rows.length == 0) {
+                if ($rows.length === 0) {
                 
                     log.error('Could not find user with ID ' + $uid + '!');
                     return;
@@ -51,23 +48,23 @@ var Auth
                 ).done($sql.free, $sql.free);
             }, $sql.free);
         });
-    }
+    };
     
     /**
      * Generates a secure password hash from a password
      * 
-     * @param string $passwd
-     * @result string Hash
+     * @param {string} $passwd
+     * @result {Promise<string>} Hash
      */
-    var _makeSecurePassword = function f_auth_makeSecurePassword($passwd) {
+    const _makeSecurePassword = function f_auth_makeSecurePassword($passwd) {
         
-        var crypt;
+        let crypt;
         if (!(crypt = libs.dep.getSCrypt())) {
             
             crypt = libs.dep.getBCrypt();
         }
         
-        var defer = q.defer();
+        const defer = defer();
         crypt.genSalt($requestState.config.securityConfig.saltRounds.value, function ($err, $salt) {
             
             if ($err) {
@@ -93,6 +90,7 @@ var Auth
         return defer.promise;
     };
     
+    // noinspection JSUnusedGlobalSymbols
     /**
      * Check if supplied password is correct. Either the database is used or a valid password/salt pair can be used
      * 
@@ -101,24 +99,24 @@ var Auth
      * @param $passwd string
      * @param $validPasswd string
      *   Optional valid password
-     * @result promise(boolean)
+     * @result {Promise<boolean>}
      */
-    var _checkPassword =
+    const _checkPassword =
     this.checkPassword = function f_auth_checkPassword($uid, $passwd, $validPasswd) {
         
-        var defer2 = q.defer();
+        const defer2 = defer();
         
         _getIDFromUser($uid).done(function ($uid) {
         
             log.info('Password Check for UID ' + $uid + '...');
             
-            var defer = q.defer();
+            const defer = defer();
 
             if (!$validPasswd) {
                 
                 libs.sql.newSQL('usermanagement', $requestState).done(function f_auth_updatePassword_newSQL($sql) {
                     
-                    var tbl = $sql.openTable('user');
+                    const tbl = $sql.openTable('user');
                     $sql.query()
                         .get([
                                 tbl.col('pass')
@@ -128,7 +126,7 @@ var Auth
                         .execute()
                         .done(function ($rows) {
                         
-                        if ($rows.length == 0) {
+                        if ($rows.length === 0) {
                             
                             log.error('Could not find user with ID ' + $uid + '!');
                             return;
@@ -149,7 +147,8 @@ var Auth
             }
             
             defer.promise.done(function ($pw) {
-                
+
+                let crypt;
                 if (!(crypt = libs.dep.getSCrypt())) {
                     
                     crypt = libs.dep.getBCrypt();
@@ -175,16 +174,14 @@ var Auth
         return defer2.promise;
     };
     
-    var _normalizeAKParams = function f_auth_normalizeAKParams($user, $key, $isGroup) {
+    const _normalizeAKParams = function f_auth_normalizeAKParams($user, $key, $isGroup) {
 
-        var d = defer();
-        var gako = {};
+        const d = defer();
+        const gako = {};
         
-        var guSwitch = _getIDFromUser;
-        if ($isGroup) {
-
-            guSwitch = _getIDFromGroup;
-        }
+        const guSwitch = $isGroup
+            ? _getIDFromGroup
+            : _getIDFromUser;
 
         guSwitch($user).then(function ($uid) {
             
@@ -200,6 +197,7 @@ var Auth
         return d.promise;
     };
 
+    // noinspection JSUnusedLocalSymbols,JSUnusedGlobalSymbols
     /**
      * Grant an access key to a user or a group
      * 
@@ -213,15 +211,14 @@ var Auth
      * @isGroup boolean
      *   is the supplied ID a group ID? // Default: false
      */
-    var _grantAccessKey =
+    const _grantAccessKey =
     this.grantAccessKey = function f_auth_grantAccessKey($uid, $key, $from, $to, $isGroup) {
         $isGroup = $isGroup || false;
-        
-        var authorizer = 0;
-        if (_isClientLoggedIn()) {
-            
-            authorizer = _session.data['ID'];
-        }
+
+        const d = defer();
+        const authorizer = _isLoggedIn()
+            ? _session.data['ID']
+            : 0;
         
         _normalizeAKParams($uid, $key, $isGroup).then(function ($gako) {
             
@@ -229,7 +226,7 @@ var Auth
             
             libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
                 
-                var d = q.defer();
+
                 if ($isGroup) {
                     
                     $sql.openTable('groupSecurity')
@@ -240,7 +237,13 @@ var Auth
                         from: $from,
                         to: $to,
                         authorizer: authorizer
-                    }).done($sql.free, $sql.free);
+                    }).done(() => {
+                        $sql.free();
+                        d.resolve();
+                    }, $e => {
+                        $sql.free();
+                        d.reject($e);
+                    });
                 }
                 else {
                     
@@ -252,18 +255,26 @@ var Auth
                         from: $from,
                         to: $to,
                         authorizer: authorizer
-                    }).done($sql.free, $sql.free);
+                    }).done(() => {
+                        $sql.free();
+                        d.resolve();
+                    }, $e => {
+                        $sql.free();
+                        d.reject($e);
+                    });
                 }
-            });
-        });
+            }, d.reject);
+        }, d.reject);
+
+        return d.promise;
     };
     
-    var _getFieldFromTable = function f_auth_getFieldFromTable($table, $field, $refCol, $refColValue) {
+    const _getFieldFromTable = function f_auth_getFieldFromTable($table, $field, $refCol, $refColValue) {
         
-        var defer = q.defer();
+        const d = defer();
         libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
 
-            var tbl = $sql.openTable($table);
+            const tbl = $sql.openTable($table);
             $sql.query()
                 .get(tbl.col($field))
                 .fulfilling()
@@ -273,37 +284,33 @@ var Auth
                 
                 if ($rows.length <= 0) {
 
-                    defer.reject(SHPS_ERROR_NO_ROWS);
+                    d.reject(SHPS_ERROR_NO_ROWS);
                 }
                 else {
 
-                    defer.resolve($rows[0].ID);
+                    d.resolve($rows[0].ID);
                 }
 
                 $sql.free();
             }, function ($err) {
                 
-                defer.reject(new Error($err));
+                d.reject(new Error($err));
                 $sql.free();
             });
-        }, defer.reject);
+        }, d.reject);
 
-        return defer.promise;
+        return d.promise;
     };
     
-    var _getIDFromTable = function f_auth_getIDFromTable($table, $refCol, $refColValue) {
-
-        if (typeof $refColValue == 'number' && $refColValue % 1 == 0) {
-            
-            var defer = q.defer();
-            defer.resolve($refColValue);
-
-            return defer.promise;
+    const _getIDFromTable = function f_auth_getIDFromTable($table, $refCol, $refColValue) {
+        if (typeof $refColValue === 'number' && $refColValue % 1 === 0) {
+            return Promise.resolve($refColValue);
         }
 
         return _getFieldFromTable($table, 'ID', $refCol, $refColValue);
     };
     
+    // noinspection JSUnusedGlobalSymbols
     /**
      * Get access key from ID
      * 
@@ -312,12 +319,13 @@ var Auth
      * @result string
      *   Access key name
      */
-    var _getAccessKeyFromID =
+    const _getAccessKeyFromID =
     this.getAccessKeyFromID = function f_auth_getAccessKeyFromID($id) {
         
         return _getFieldFromTable('accessKey', 'name', 'ID', $id);
     };
     
+    // noinspection JSUnusedGlobalSymbols
     /**
      * Get ID from access key
      * 
@@ -326,12 +334,13 @@ var Auth
      * @result integer
      *   ID
      */
-    var _getIDFromAccessKey =
+    const _getIDFromAccessKey =
     this.getIDFromAccessKey = function f_auth_getIDFromAccessKey($name) {
         
         return _getIDFromTable('accessKey', 'name', $name);
     };
     
+    // noinspection JSUnusedGlobalSymbols
     /**
      * Get ID from user
      * 
@@ -340,12 +349,13 @@ var Auth
      * @result integer
      *   ID
      */
-    var _getIDFromUser =
+    const _getIDFromUser =
     this.getIDFromUser = function f_auth_getIDFromUser($name) {
         
         return _getIDFromTable('user', 'user', $name);
     };
     
+    // noinspection JSUnusedGlobalSymbols
     /**
      * Get ID from mail
      * 
@@ -354,12 +364,13 @@ var Auth
      * @result integer
      *   ID
      */
-    var _getIDFromMail =
+    const _getIDFromMail =
     this.getIDFromMail = function f_auth_getIDFromMail($mail) {
         
         return _getIDFromTable('user', 'email', $mail);
     };
     
+    // noinspection JSUnusedGlobalSymbols
     /**
      * Get ID from group
      * 
@@ -368,12 +379,13 @@ var Auth
      * @result integer
      *   ID
      */
-    var _getIDFromGroup =
+    const _getIDFromGroup =
     this.getIDFromGroup = function f_auth_getIDFromGroup($name) {
         
         return _getIDFromTable('group', 'name', $name);
     };
-    
+
+    // noinspection JSUnusedLocalSymbols,JSUnusedGlobalSymbols
     /**
      * Get user from ID
      * 
@@ -382,21 +394,20 @@ var Auth
      * @result string
      *   Name
      */
-    var _getUserFromID =
+    const _getUserFromID =
     this.getUserFromID = function f_auth_getUserFromID($id) {
         
-        if (typeof $refColValue == 'string') {
+        if (typeof $refColValue === 'string') {
             
             return $refColValue;
         }
-        else if (typeof $refColValue == 'number' && $refColValue % 1 == 0) {
+        else if (typeof $refColValue === 'number' && $refColValue % 1 === 0) {
             
             return _getFieldFromTable('user', 'user', 'ID', $id);
         }
-        
-        return;
     };
-    
+
+    // noinspection JSUnusedLocalSymbols,JSUnusedGlobalSymbols
     /**
      * Revoke access key from user or group
      * 
@@ -407,7 +418,7 @@ var Auth
      * @param isGroup boolean
      *   Is the supplied $user a group? // Default: false
      */
-    var _revokeAccessKey =
+    const _revokeAccessKey =
     this.revokeAccessKey = function f_auth_revokeAccessKey($user, $key, $isGroup) {
         $isGroup = $isGroup || false;
         
@@ -418,9 +429,8 @@ var Auth
             libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
 
                 if ($isGroup) {
-                    
-                    var tblGS = $sql.openTable('groupSecurity');
-                    var tblG = $sql.openTable('group');
+
+                    const tblGS = $sql.openTable('groupSecurity');
                     tblGS.delete()
                         .eq(tblGS.col('gid'), $gako.uid)
                         .eq(tblGS.col('accesskey'), $gako.key)
@@ -428,9 +438,8 @@ var Auth
                         .done($sql.free, $sql.free);
                 }
                 else {
-                    
-                    var tblGS = $sql.openTable('userSecurity');
-                    var tblG = $sql.openTable('user');
+
+                    const tblGS = $sql.openTable('userSecurity');
                     tblGS.delete()
                         .eq(tblGS.col('uid'), $gako.uid)
                         .eq(tblGS.col('accesskey'), $gako.key)
@@ -441,6 +450,7 @@ var Auth
         });
     };
 
+    // noinspection JSUnusedLocalSymbols,JSUnusedGlobalSymbols
     /**
      * Check if a user has an access key
      * 
@@ -451,14 +461,14 @@ var Auth
      * @return
      *   promise({ [boolean]hasAccessKey, [string]message, [string]key, [integer]httpStatus })
      */
-    var _hasAccessKeyExt =
+    const _hasAccessKeyExt =
     this.hasAccessKeyExt = function f_auth_hasAccessKeyExt($key, $user) {
         
         return _hasAccessKey($key, $user).then(function ($ak) {
-            
-            var defer = q.defer();
-            
-            var r = {
+
+            const defer = defer();
+
+            const r = {
                 
                 hasAccessKey: $ak,
                 message: 'ERROR: Unknown Problem in `f_auth_hasAccessKeyExt`',
@@ -474,7 +484,7 @@ var Auth
             }
             else {
                 
-                if (_isClientLoggedIn()) {
+                if (_isLoggedIn()) {
                     
                     r.httpStatus = 403; // FORBIDDEN
                 }
@@ -493,26 +503,23 @@ var Auth
 
             return defer.promise;
         }, function ($err) {
-            
-            var defer = q.defer();
-            defer.reject(new Error($err));
-
-            return defer.promise;
+            return Promise.reject($err);
         });
     };
-    
+
+    // noinspection JSUnusedLocalSymbols,JSUnusedGlobalSymbols
     /**
      * Checks if current client is logged in
      * 
      * @result
      *   { [boolean]isLoggedIn, [string]message, [integer]httpStatus }
      */
-    var _isClientLoggedInExt =
+    const _isClientLoggedInExt =
     this.isClientLoggedInExt = function f_auth_isClientLoggedInExt() {
-        
-        var r = {
+
+        const r = {
             
-            isLoggedIn: _isClientLoggedIn(),
+            isLoggedIn: _isLoggedIn(),
             message: 'ERROR: Unknown Problem in `f_auth_isClientLoggedInExt`',
             httpStatus: 500,
         };
@@ -541,23 +548,23 @@ var Auth
      * @return
      *   promise(boolean)
      */
-    var _hasAccessKey =
+    const _hasAccessKey =
     this.hasAccessKey = function f_auth_hasAccessKey($key, $user) {
-        
-        var defer = q.defer();
-        if ($key == 0 || $key === 'SYS_NULL') {
+
+        const d = defer();
+        if ($key === 0 || $key === 'SYS_NULL') {
             
-            defer.resolve(true);
-            return defer.promise;
+            d.resolve(true);
+            return d.promise;
         }
-        
-        var uPromise = q.defer();
+
+        const uPromise = d();
         if (typeof $user === 'undefined') {
             
-            if (!_isClientLoggedIn()) {
+            if (!_isLoggedIn()) {
                 
-                defer.resolve(false);
-                return defer.promise;
+                d.resolve(false);
+                return d.promise;
             }
 
             uPromise.resolve(_session.data['ID']);
@@ -573,15 +580,15 @@ var Auth
         uPromise.promise.done(function ($user) {
 
             libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
-                
-                var time = (new Date()).getTime() / 1000 | 0;
-                var tblAK = $sql.openTable('accessKey');
+
+                const time = (new Date()).getTime() / 1000 | 0;
+                const tblAK = $sql.openTable('accessKey');
                 async.parallel({
                     
                     funcs: [
-                        function ($_p1, $_p2) {
-                            
-                            var tblUS = $sql.openTable('userSecurity');
+                        function ($_p1) {
+
+                            const tblUS = $sql.openTable('userSecurity');
 
                             $sql.query()
                                 .get(tblUS.col('uid'))
@@ -601,10 +608,10 @@ var Auth
                             });
                         },
 
-                        function ($_p1, $_p2) {
-                            
-                            var tblGS = $sql.openTable('groupSecurity');
-                            var tblGU = $sql.openTable('groupUser');
+                        function ($_p1) {
+
+                            const tblGS = $sql.openTable('groupSecurity');
+                            const tblGU = $sql.openTable('groupUser');
                             
                             $sql.query()
                                 .get(tblGS.col('gid'))
@@ -628,25 +635,25 @@ var Auth
                     ]
                 }, function ($err, $results) {
                     
-                    var i = 0;
-                    var l = $results.operations.length;
+                    let i = 0;
+                    const l = $results.operations.length;
                     while (i < l) {
                         
                         if ($results.operations[i].status === 'ok' && $results.operations[i].result) {
                             
-                            defer.resolve(true);
+                            d.resolve(true);
                             return;
                         }
                         
                         i++;
                     }
                     
-                    defer.resolve(false);
-                }, defer.reject);
-            }, defer.reject);
-        }, defer.reject);
+                    d.resolve(false);
+                }, d.reject);
+            }, d.reject);
+        }, d.reject);
         
-        return defer.promise;
+        return d.promise;
     };
     
     /**
@@ -657,26 +664,26 @@ var Auth
      * @return
      *   Promise()
      */
-    var _delayBruteforce = function f_auth_delayBruteforce($uid) {
-        
-        var defer = q.defer();
+    const _delayBruteforce = function f_auth_delayBruteforce($uid) {
+
+        const d = defer();
         if (typeof $uid === 'undefined') {
 
-            defer.resolve('No UID provided!');
-            return defer.promise;
+            d.resolve('No UID provided!');
+            return d.promise;
         }
 
         libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
             
             if (typeof $uid === 'number') {
 
-                var tblLQ = $sql.openTable('loginQuery');
-                var colLQ = 'uid';
+                const tblLQ = $sql.openTable('loginQuery');
+                const colLQ = 'uid';
             }
             else {
 
-                var tblLQ = $sql.openTable('passQuery');
-                var colLQ = 'pass';
+                const tblLQ = $sql.openTable('passQuery');
+                const colLQ = 'pass';
             }
 
             $sql.query()
@@ -685,11 +692,11 @@ var Auth
                 .eq(tblLQ.col(colLQ), $uid)
                 .execute()
                 .done(function ($rows) {
-                
-                var now = (Date.now() / 1000) | 0;
+
+                    const now = (Date.now() / 1000) | 0;
                 if ($rows.length <= 0) {
-                    
-                    var objLQ = {
+
+                    const objLQ = {
 
                         time: now + $requestState.config.securityConfig.loginDelay.value
                     };
@@ -698,15 +705,13 @@ var Auth
                     tblLQ.insert(objLQ)
                         .done($sql.free, $sql.free);
 
-                    defer.resolve();
+                    d.resolve();
                 }
                 else {
-                    
-                    var det = $rows[0].time;
-                    if (det <= now) {
 
-                        det = now;
-                    }
+                    const det = det <= now
+                        ? now
+                        : $rows[0].time;
 
                     tblLQ.update({
                         
@@ -718,17 +723,17 @@ var Auth
 
                     setTimeout(function () {
 
-                        defer.resolve();
+                        d.resolve();
                     }, (det - now) * 1000);
                 }
             }, function ($err) {
                 
                 $sql.free();
-                defer.reject(new Error($err));
+                d.reject(new Error($err));
             });
-        }, defer.reject);
+        }, d.reject);
 
-        return defer.promise;
+        return d.promise;
     };
     
     /**
@@ -739,7 +744,7 @@ var Auth
      * @param $dbRec Object
      * @result false|string
      */
-    var _isLoggedInFromDBRecord = function ($dbRec) {
+    const _isLoggedInFromDBRecord = function ($dbRec) {
 
         $dbRec = $dbRec || {};
         $dbRec.isLoggedIn = $dbRec.isLoggedIn || false;
@@ -749,7 +754,7 @@ var Auth
         // ASVS 3.3
         if ($dbRec.isLoggedIn && ((Date.now() / 1000) - $dbRec.lastActivity <= $requestState.config.securityConfig.sessionTimeout.value)) {
             
-            return $dbRec.lastSID != 'noSID' ? $dbRec.lastSID : false;
+            return $dbRec.lastSID !== 'noSID' ? $dbRec.lastSID : false;
         }
         else {
 
@@ -758,7 +763,8 @@ var Auth
 
         return false;
     };
-    
+
+    // noinspection JSUnusedLocalSymbols,JSUnusedGlobalSymbols
     /**
      * Login a user with a password
      * Autologin is supported for HTTPS only
@@ -769,15 +775,15 @@ var Auth
      * @param $pw string
      * @param $autoLogin boolean
      *   // Default: false
-     * @result boolean
+     * @result Promise{boolean}
      */
-    var _login =
+    const _login =
     this.login = function f_auth_login($user, $pw, $autoLogin) {
         $autoLogin = $autoLogin || false;
         
         log.info('LOGIN TRY: ' + $user + ' from ' + libs.SFFM.getIP($requestState.request));
 
-        var defer = q.defer();
+        const d = defer();
         async.waterfall([
         
             function ($cb) {
@@ -825,14 +831,14 @@ var Auth
                 }, $cb);
             },
             function ($sql, $cb) {
-                
-                var alt = '';
+
+                let alt = '';
                 if ($autoLogin && libs.SFFM.isHTTPS($requestState.request)) {
                     
                     alt = $requestState.COOKIE.getCookie(SHPS_COOKIE_AUTOLOGINTOKEN) || '0';
                 }
-                
-                var tblU = $sql.openTable('user');
+
+                const tblU = $sql.openTable('user');
                 $sql.query()
                     .get(tblU.col('*'))
                     .fulfilling()
@@ -852,12 +858,12 @@ var Auth
                         $cb(new Error(SHPS_ERROR_NO_ROWS, false));
                     }
                     else {
-                        
-                        var ur = $rows[0];
+
+                        let ur = $rows[0];
                         if ($rows.length > 1) {
                             
-                            var i = 0;
-                            var l = $rows.length;
+                            let i = 0;
+                            const l = $rows.length;
                             while (i < l) {
                                 
                                 if ($rows[i].autoLoginToken === alt) {
@@ -871,15 +877,15 @@ var Auth
                         }
                         
                         // ASVS V2 3.16
-                        var lastSID = _isLoggedInFromDBRecord(ur);
+                        const lastSID = _isLoggedInFromDBRecord(ur);
                         if (lastSID !== false && lastSID !== _session.toString()) {
                             
                             _session.closeSession(lastSID);
                         }
                         
                         if (alt !== '' && alt === ur.autoLoginToken/* && check IP range */) {
-                            
-                            var newToken = _session.genNewSID();
+
+                            const newToken = _session.genNewSID();
                             $requestState.COOKIE.setCookie(SHPS_COOKIE_AUTOLOGINTOKEN, newToken, $requestState.config.securityConfig.autoLoginTimeout.value, true);
                             
                             libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
@@ -909,9 +915,9 @@ var Auth
                             
                             if ($cpR) {
                                 
-                                $requestState.SESSION = oa($requestState.SESSION, ur);
-                                
-                                var newToken = _session.genNewSID();
+                                $requestState.SESSION = Object.assign($requestState.SESSION, ur);
+
+                                const newToken = _session.genNewSID();
                                 $requestState.COOKIE.setCookie(SHPS_COOKIE_AUTOLOGINTOKEN, newToken, $requestState.config.securityConfig.autoLoginTimeout.value, true);
                                 
                                 libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
@@ -938,25 +944,26 @@ var Auth
             
             if ($err) {
 
-                defer.reject(new Error($err));
+                d.reject(new Error($err));
             }
             else {
 
-                defer.resolve($res);
+                d.resolve($res);
             }
             
         });
         
-        return defer.promise;
+        return d.promise;
     };
     
+    // noinspection JSUnusedGlobalSymbols
     /**
      * Checks if current client is logged in
      * @deprecated since 4.0.1, use auth::isLoggedIn(undefined) instead
      * 
      * @result boolean
      */
-    var _isClientLoggedIn =
+    const _isClientLoggedIn =
     this.isClientLoggedIn = function f_auth_isClientLoggedIn() {
 
         return typeof $requestState.SESSION['user'] !== 'undefined';
@@ -970,14 +977,14 @@ var Auth
      * @result
      *   promise(boolean)
      */
-    var _isLoggedIn =
+    const _isLoggedIn =
     this.isLoggedIn = function f_auth_isLoggedIn($user) {
-        
-        var defer = q.defer();
+
+        const d = defer();
         
         if (typeof $user === 'undefined') {
             
-            defer.resolve(typeof $requestState.SESSION.user !== 'undefined');
+            d.resolve(typeof $requestState.SESSION.user !== 'undefined');
         }
         else {
             
@@ -985,13 +992,13 @@ var Auth
             
                 if ($user === $requestState.SESSION.ID) {
                 
-                    defer.resolve(null, _isClientLoggedIn());
+                    d.resolve(null, _isClientLoggedIn());
                     return;
                 }
 
                 libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
-                    
-                    var tblUser = $sql.openTable('user');
+
+                    const tblUser = $sql.openTable('user');
                     $sql.query()
                         .get(tblUser.col('isLoggedIn'))
                         .fulfilling()
@@ -1000,24 +1007,25 @@ var Auth
                         .done(function ($rows) {
                             
                             $sql.free();
-                            defer.resolve($rows.length > 0 && $rows[0].isLoggedIn > 0);
+                            d.resolve($rows.length > 0 && $rows[0].isLoggedIn > 0);
                         }, function ($e) {
                             
                             $sql.free();
-                            defer.reject($e);
+                            d.reject($e);
                         });
                 });
-            }, defer.reject);
+            }, d.reject);
         }
         
-        return defer.promise;
+        return d.promise;
     };
-    
-    var _register =
+
+    // noinspection JSUnusedLocalSymbols,JSUnusedGlobalSymbols
+    const _register =
     this.register = function f_auth_register($user, $password, $mail, $locked) {
         $locked = typeof $locked !== 'undefined' ? $locked : true;
 
-        var d = q.defer();
+        const d = defer();
         
         libs.dep.getBCrypt().hash($password, null, null, function ($err, $hash) {
         
@@ -1028,10 +1036,10 @@ var Auth
             }
 
             libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
-                
-                var tblU = $sql.openTable('user');
-                var ip = libs.SFFM.getIP($requestState.request);
-                var uts = (new Date()).getTime() / 1000 | 0;
+
+                const tblU = $sql.openTable('user');
+                const ip = libs.SFFM.getIP($requestState.request);
+                const uts = (new Date()).getTime() / 1000 | 0;
                 tblU.insert({
                     
                     user: $user,
@@ -1070,8 +1078,8 @@ var Auth
     if ($requestState.SESSION._loggedIn) {
 
         libs.sql.newSQL('usermanagement', $requestState).done(function ($sql) {
-            
-            var tblU = $sql.openTable('user');
+
+            const tblU = $sql.openTable('user');
             tblU.update({
             
                     lastSID: $requestState.SESSION.toString(),
@@ -1085,7 +1093,8 @@ var Auth
     }
 };
 
-var _newAuth
+// noinspection JSUnusedLocalSymbols
+const _newAuth
 = me.newAuth = function f_auth_newAuth($requestState) {
     
     return new Auth($requestState);

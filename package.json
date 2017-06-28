@@ -1,14 +1,12 @@
-﻿{
+{
     "name": "SHPS4Node-auth",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "description": "Authentication used by SHPS",
     "author": "Marco Alka <me@marco-alka.de>",
     "main": "index-auth.js",
     "dependencies": {
-        "q":"^1.2.0",
-        "promise-defer":"^1.0.0",
-        "object-assign": ">=2.0.0 < 5",
+        "promise-defer": "^1.0.0",
         "vasync": "^1.6.0",
-        "node-mod-load": "^2.1.0"
+        "node-mod-load": "^3.1.0"
     }
 }
